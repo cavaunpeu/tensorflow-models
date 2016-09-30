@@ -40,7 +40,8 @@ class LogisticRegression(TensorFlowBaseModel):
         predictions = self.feed_forward()
         loss = -tf.reduce_sum(self.dataset.labels * tf.log(predictions))
         if self._beta:
-            loss += tf.nn.l2_loss(self._weights)
+            loss += self._beta * tf.nn.l2_loss(self._weights) + \
+                    self._beta * tf.nn.l2_loss(self._biases)
         return tf.reduce_mean(loss)
     
     @graph_node
