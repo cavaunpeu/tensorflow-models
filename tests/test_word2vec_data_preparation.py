@@ -2,7 +2,7 @@ import unittest
 
 
 from vanilla_neural_nets.recurrent_neural_network.training_data import WordLevelRNNTrainingDataBuilder, _RNNTrainingData
-from helpers.prepare import Word2VecTrainingDataBuilder
+from helpers.prepare import Word2VecTrainingDataBuilder, _Word2VecTrainingData
 
 
 class TestWord2VecDataPreparation(unittest.TestCase):
@@ -52,3 +52,10 @@ class TestWord2VecDataPreparation(unittest.TestCase):
 
         self.assertEqual(training_data.y_train,
             self.EXPECTED_Y_TRAIN_WHEN_SOME_WORDS_REMOVED)
+
+    def test_word2vec_training_data_builder_base_class_is_rnn_training_data_builder(self):
+        self.assertEqual(Word2VecTrainingDataBuilder().__class__.__base__, WordLevelRNNTrainingDataBuilder)
+
+    def test_word2vec_training_data_base_class_is_rnn_training_data(self):
+        dummy_word2vec_training_data_instance = _Word2VecTrainingData(tokenized_corpus=[])
+        self.assertEqual(dummy_word2vec_training_data_instance.__class__.__base__, _RNNTrainingData)
