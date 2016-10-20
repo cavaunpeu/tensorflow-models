@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from willwolf.tensorflow_helpers.model import TensorFlowBaseModel, graph_node
+from helpers.model import TensorFlowBaseModel, graph_node
 
 
 class LogisticRegression(TensorFlowBaseModel):
