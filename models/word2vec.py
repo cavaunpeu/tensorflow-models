@@ -17,7 +17,8 @@ class Word2Vec(TensorFlowBaseModel):
 
     @property
     def _graph_nodes(self):
-        return [self._define_network_parameters, self.compute_loss, self.optimize, self.compute_normalized_embeddings]
+        return [self._define_network_parameters, self._lookup_embeddings, self.compute_loss, self.optimize,
+            self.compute_normalized_embeddings]
 
     @graph_node
     def _define_network_parameters(self):
@@ -31,8 +32,13 @@ class Word2Vec(TensorFlowBaseModel):
         self._second_layer_biases = tf.Variable(tf.zeros([self._vocabulary_size]))
 
     @graph_node
-    def compute_loss(self):
+    def _lookup_embeddings(self):
         embedding = tf.nn.embedding_lookup(params=self._embeddings, ids=self.dataset.data)
+        return tf.reduce_sum(embedding, reduction_indices=1) if len(self.dataset.data.get_shape()) > 1 else embedding
+
+    @graph_node
+    def compute_loss(self):
+        embedding = self._lookup_embeddings()
         total_sampled_softmax_loss = tf.nn.sampled_softmax_loss(
             weights=self._second_layer_weights,
             biases=self._second_layer_biases,
