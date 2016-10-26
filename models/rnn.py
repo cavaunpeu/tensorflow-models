@@ -39,6 +39,14 @@ class RNN(TensorFlowBaseModel):
 
     @graph_node
     def _compute_logits(self):
+        hidden_states = self._feed_forward()
+        with tf.variable_scope(name_or_scope=self.SOFTMAX_LAYER_SCOPE):
+            W = tf.get_variable('W', shape=[self._hidden_state_size, self._n_classes])
+            b = tf.get_variable('b', shape=[self._n_classes])
+            return [tf.matmul(hidden_state, W) + b for hidden_state in hidden_states[1:]]
+
+    @graph_node
+    def _feed_forward(self):
         self._unrolled_dataset = self._unroll_dataset()
         self._initialize_rnn_cell_parameters()
         batch_size = self.dataset.data.get_shape()[0]
@@ -49,11 +57,7 @@ class RNN(TensorFlowBaseModel):
         for rnn_input in self._unrolled_dataset.data:
             hidden_state = self._rnn_cell(rnn_input=rnn_input, hidden_state=hidden_states[-1])
             hidden_states.append(hidden_state)
-
-        with tf.variable_scope(name_or_scope=self.SOFTMAX_LAYER_SCOPE):
-            W = tf.get_variable('W', shape=[self._hidden_state_size, self._n_classes])
-            b = tf.get_variable('b', shape=[self._n_classes])
-            return [tf.matmul(hidden_state, W) + b for hidden_state in hidden_states[1:]]
+        return hidden_states
 
     @graph_node
     def _compute_predictions(self):
@@ -97,7 +101,7 @@ class LSTM(RNN):
             b = tf.get_variable('b', shape=[4*self._hidden_state_size], initializer=tf.constant_initializer(0.))
 
     @graph_node
-    def _compute_logits(self):
+    def _feed_forward(self):
         self._unrolled_dataset = self._unroll_dataset()
         self._initialize_rnn_cell_parameters()
         batch_size = self.dataset.data.get_shape()[0]
@@ -111,18 +115,13 @@ class LSTM(RNN):
             hidden_state, memory_cell = self._rnn_cell(rnn_input=rnn_input, hidden_state=hidden_states[-1], memory_cell=memory_cells[-1])
             hidden_states.append(hidden_state)
             memory_cells.append(memory_cell)
-
-        with tf.variable_scope(name_or_scope=self.SOFTMAX_LAYER_SCOPE):
-            W = tf.get_variable('W', shape=[self._hidden_state_size, self._n_classes])
-            b = tf.get_variable('b', shape=[self._n_classes])
-            return [tf.matmul(hidden_state, W) + b for hidden_state in hidden_states[1:]]
+        return hidden_states
 
     def _rnn_cell(self, rnn_input, hidden_state, memory_cell):
         with tf.variable_scope(name_or_scope=self.RNN_CELL_SCOPE, reuse=True):
             W = tf.get_variable('W')
             b = tf.get_variable('b')
             rnn_input = tf.concat(concat_dim=1, values=4*[rnn_input, hidden_state])
-            gate_size = self._n_classes + self._hidden_state_size
 
             Z = tf.matmul(rnn_input, W) + b
             f_i_o = tf.sigmoid( Z[:, :3*self._hidden_state_size] )
