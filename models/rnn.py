@@ -24,7 +24,7 @@ class RNN(TensorFlowBaseModel):
 
     @graph_node
     def _unroll_dataset(self):
-        embeddings = tf.Variable(initial_value=tf.random_uniform([self._n_classes+1, self._embedding_layer_size], -1., 1.))
+        embeddings = tf.Variable(initial_value=tf.random_uniform(shape=[self._n_classes + 1, self._embedding_layer_size], minval=-1., maxval=1.))
         data = tf.nn.embedding_lookup(params=embeddings, ids=self.dataset.data)
         labels = tf.one_hot(self.dataset.labels, self._n_classes)
 
@@ -37,15 +37,16 @@ class RNN(TensorFlowBaseModel):
     @graph_node
     def _initialize_rnn_cell_parameters(self):
         with tf.variable_scope(name_or_scope=self.RNN_CELL_SCOPE):
-            # add in a tf.truncated_normal() initializer here later
-            W = tf.get_variable('W', shape=[self._embedding_layer_size + self._hidden_state_size, self._hidden_state_size])
+            W_shape = [self._embedding_layer_size + self._hidden_state_size, self._hidden_state_size]
+            W = tf.get_variable('W', initializer=tf.truncated_normal(shape=W_shape, mean=-.1, stddev=.1))
             b = tf.get_variable('b', shape=[self._hidden_state_size], initializer=tf.constant_initializer(0.))
 
     @graph_node
     def _compute_logits(self):
         hidden_states = self._feed_forward()
         with tf.variable_scope(name_or_scope=self.SOFTMAX_LAYER_SCOPE):
-            W = tf.get_variable('W', shape=[self._hidden_state_size, self._n_classes])
+            W_shape = [self._hidden_state_size, self._n_classes]
+            W = tf.get_variable('W', initializer=tf.truncated_normal(shape=W_shape, mean=-.1, stddev=.1))
             b = tf.get_variable('b', shape=[self._n_classes])
             return [tf.matmul(hidden_state, W) + b for hidden_state in hidden_states[1:]]
 
@@ -100,8 +101,8 @@ class LSTM(RNN):
     @graph_node
     def _initialize_rnn_cell_parameters(self):
         with tf.variable_scope(name_or_scope=self.RNN_CELL_SCOPE):
-            # add in a tf.truncated_normal() initializer here later
-            W = tf.get_variable('W', shape=[4*(self._embedding_layer_size + self._hidden_state_size), 4*self._hidden_state_size])
+            W_shape = [4*(self._embedding_layer_size + self._hidden_state_size), 4*self._hidden_state_size]
+            W = tf.get_variable('W', initializer=tf.truncated_normal(shape=W_shape, mean=-.1, stddev=.1))
             b = tf.get_variable('b', shape=[4*self._hidden_state_size], initializer=tf.constant_initializer(0.))
 
     @graph_node
