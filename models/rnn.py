@@ -85,3 +85,51 @@ class RNN(TensorFlowBaseModel):
             b = tf.get_variable('b')
             rnn_input = tf.concat(concat_dim=1, values=[rnn_input, hidden_state])
             return tf.tanh( tf.matmul(rnn_input, W) + b )
+
+
+class LSTM(RNN):
+
+    @graph_node
+    def _initialize_rnn_cell_parameters(self):
+        with tf.variable_scope(name_or_scope=self.RNN_CELL_SCOPE):
+            # add in a tf.truncated_normal() initializer here later
+            W = tf.get_variable('W', shape=[4*(self._n_classes + self._hidden_state_size), 4*self._hidden_state_size])
+            b = tf.get_variable('b', shape=[4*self._hidden_state_size], initializer=tf.constant_initializer(0.))
+
+    @graph_node
+    def _compute_logits(self):
+        self._unrolled_dataset = self._unroll_dataset()
+        self._initialize_rnn_cell_parameters()
+        batch_size = self.dataset.data.get_shape()[0]
+
+        initial_hidden_state = tf.zeros(dtype=tf.float32, shape=[batch_size, self._hidden_state_size])
+        initial_memory_cell = tf.zeros(dtype=tf.float32, shape=[batch_size, self._hidden_state_size])
+        hidden_states = [initial_hidden_state]
+        memory_cells = [initial_memory_cell]
+
+        for rnn_input in self._unrolled_dataset.data:
+            hidden_state, memory_cell = self._rnn_cell(rnn_input=rnn_input, hidden_state=hidden_states[-1], memory_cell=memory_cells[-1])
+            hidden_states.append(hidden_state)
+            memory_cells.append(memory_cell)
+
+        with tf.variable_scope(name_or_scope=self.SOFTMAX_LAYER_SCOPE):
+            W = tf.get_variable('W', shape=[self._hidden_state_size, self._n_classes])
+            b = tf.get_variable('b', shape=[self._n_classes])
+            return [tf.matmul(hidden_state, W) + b for hidden_state in hidden_states[1:]]
+
+    def _rnn_cell(self, rnn_input, hidden_state, memory_cell):
+        with tf.variable_scope(name_or_scope=self.RNN_CELL_SCOPE, reuse=True):
+            W = tf.get_variable('W')
+            b = tf.get_variable('b')
+            rnn_input = tf.concat(concat_dim=1, values=4*[rnn_input, hidden_state])
+            gate_size = self._n_classes + self._hidden_state_size
+
+            Z = tf.matmul(rnn_input, W) + b
+            f_i_o = tf.sigmoid( Z[:, :3*self._hidden_state_size] )
+            candidate_memory_cell = tf.tanh( Z[:, 3*self._hidden_state_size:] )
+
+            f, i, o = tf.split(split_dim=1, num_split=3, value=f_i_o)
+            memory_cell = f * memory_cell + i * candidate_memory_cell
+            hidden_state = o * tf.tanh(memory_cell)
+
+            return hidden_state, memory_cell
