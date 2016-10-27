@@ -65,11 +65,6 @@ class RNN(TensorFlowBaseModel):
         return hidden_states
 
     @graph_node
-    def _compute_predictions(self):
-        logits = self._compute_logits()
-        return [tf.nn.softmax(logit) for logit in logits]
-
-    @graph_node
     def optimize(self):
         loss = self.compute_loss()
         return tf.train.AdagradOptimizer(self._learning_rate).minimize(loss)
@@ -80,13 +75,6 @@ class RNN(TensorFlowBaseModel):
         losses = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels) for \
                   logits, labels in zip(logits, self._unrolled_dataset.labels)]
         return tf.reduce_mean(losses)
-
-    @graph_node
-    def compute_accuracy(self):
-        predictions = self._compute_predictions()
-        labels = tf.pack(self._unrolled_dataset.labels)
-        mistakes = tf.not_equal(labels, tf.argmax(predictions, dimension=2))
-        return 1 - tf.reduce_mean(tf.cast(mistakes, tf.float32))
 
     def _rnn_cell(self, rnn_input, hidden_state):
         with tf.variable_scope(name_or_scope=self.RNN_CELL_SCOPE, reuse=True):
