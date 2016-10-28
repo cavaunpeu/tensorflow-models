@@ -15,7 +15,7 @@ class RNN(TensorFlowBaseModel):
         self._embedding_layer_size = embedding_layer_size
         self._hidden_state_size = hidden_state_size
         self._learning_rate = learning_rate
-        self._unrolled_dataset = None
+        self.unrolled_dataset = None
         super().__init__()
 
     @property
@@ -28,11 +28,11 @@ class RNN(TensorFlowBaseModel):
         data = tf.nn.embedding_lookup(params=embeddings, ids=self.dataset.data)
         labels = tf.one_hot(self.dataset.labels, self._n_classes)
 
-        rnn_inputs = tf.unpack(data, axis=1)
-        rnn_labels = tf.unpack(labels, axis=1)
-        rnn_labels = [tf.argmax(rnn_label, dimension=1) for rnn_label in rnn_labels]
+        unrolled_data = tf.unpack(data, axis=1)
+        unrolled_labels = tf.unpack(labels, axis=1)
+        unrolled_labels = [tf.argmax(rnn_label, dimension=1) for rnn_label in unrolled_labels]
 
-        return TensorFlowDataset(data=rnn_inputs, labels=rnn_labels)
+        return TensorFlowDataset(data=unrolled_data, labels=unrolled_labels)
 
     @graph_node
     def _initialize_rnn_cell_parameters(self):
@@ -43,7 +43,7 @@ class RNN(TensorFlowBaseModel):
 
     @graph_node
     def _compute_logits(self):
-        hidden_states = self._feed_forward()
+        hidden_states = self.feed_forward()
         with tf.variable_scope(name_or_scope=self.SOFTMAX_LAYER_SCOPE):
             W_shape = [self._hidden_state_size, self._n_classes]
             W = tf.get_variable('W', initializer=tf.truncated_normal(shape=W_shape, mean=-.1, stddev=.1))
@@ -51,23 +51,18 @@ class RNN(TensorFlowBaseModel):
             return [tf.matmul(hidden_state, W) + b for hidden_state in hidden_states[1:]]
 
     @graph_node
-    def _feed_forward(self):
-        self._unrolled_dataset = self._unroll_dataset()
+    def feed_forward(self, initial_hidden_state=None):
+        self.unrolled_dataset = self._unroll_dataset()
         self._initialize_rnn_cell_parameters()
         batch_size = self.dataset.data.get_shape()[0]
 
-        initial_hidden_state = tf.zeros(dtype=tf.float32, shape=[batch_size, self._hidden_state_size])
+        initial_hidden_state = initial_hidden_state or tf.zeros(dtype=tf.float32, shape=[batch_size, self._hidden_state_size])
         hidden_states = [initial_hidden_state]
 
-        for rnn_input in self._unrolled_dataset.data:
+        for rnn_input in self.unrolled_dataset.data:
             hidden_state = self._rnn_cell(rnn_input=rnn_input, hidden_state=hidden_states[-1])
             hidden_states.append(hidden_state)
         return hidden_states
-
-    @graph_node
-    def _compute_predictions(self):
-        logits = self._compute_logits()
-        return [tf.nn.softmax(logit) for logit in logits]
 
     @graph_node
     def optimize(self):
@@ -78,15 +73,8 @@ class RNN(TensorFlowBaseModel):
     def compute_loss(self):
         logits = self._compute_logits()
         losses = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels) for \
-                  logits, labels in zip(logits, self._unrolled_dataset.labels)]
+                  logits, labels in zip(logits, self.unrolled_dataset.labels)]
         return tf.reduce_mean(losses)
-
-    @graph_node
-    def compute_accuracy(self):
-        predictions = self._compute_predictions()
-        labels = tf.pack(self._unrolled_dataset.labels)
-        mistakes = tf.not_equal(labels, tf.argmax(predictions, dimension=2))
-        return 1 - tf.reduce_mean(tf.cast(mistakes, tf.float32))
 
     def _rnn_cell(self, rnn_input, hidden_state):
         with tf.variable_scope(name_or_scope=self.RNN_CELL_SCOPE, reuse=True):
@@ -106,17 +94,17 @@ class LSTM(RNN):
             b = tf.get_variable('b', shape=[4*self._hidden_state_size], initializer=tf.constant_initializer(0.))
 
     @graph_node
-    def _feed_forward(self):
-        self._unrolled_dataset = self._unroll_dataset()
+    def feed_forward(self, initial_hidden_state=None):
+        self.unrolled_dataset = self._unroll_dataset()
         self._initialize_rnn_cell_parameters()
-        batch_size = self.dataset.data.get_shape()[0]
+        batch_size = tf.shape(self.dataset.data)[0]
 
-        initial_hidden_state = tf.zeros(dtype=tf.float32, shape=[batch_size, self._hidden_state_size])
+        initial_hidden_state = initial_hidden_state or tf.zeros(dtype=tf.float32, shape=[batch_size, self._hidden_state_size])
         initial_memory_cell = tf.zeros(dtype=tf.float32, shape=[batch_size, self._hidden_state_size])
         hidden_states = [initial_hidden_state]
         memory_cells = [initial_memory_cell]
 
-        for rnn_input in self._unrolled_dataset.data:
+        for rnn_input in self.unrolled_dataset.data:
             hidden_state, memory_cell = self._rnn_cell(rnn_input=rnn_input, hidden_state=hidden_states[-1], memory_cell=memory_cells[-1])
             hidden_states.append(hidden_state)
             memory_cells.append(memory_cell)
